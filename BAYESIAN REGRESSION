@@ -1,0 +1,135 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ML / Stats
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+# Random Forest
+from sklearn.ensemble import RandomForestRegressor
+import shap
+
+# Gradient Boosting
+from xgboost import XGBRegressor
+
+# GAM
+from pygam import LinearGAM, s
+
+# SEM
+from semopy import Model
+
+# Multivariate
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
+# =========================
+# LOAD DATA
+# =========================
+df = pd.read_csv("ML.csv", encoding="latin1")
+
+features = ['SSP', 'PPC']
+target = 'Coiling Ratio Index (CRI):\nCRI = D / (D + S)'
+
+df = df.dropna(subset=features + [target])
+
+X = df[features]
+y = df[target]
+
+# Standardize
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_df = pd.DataFrame(X_scaled, columns=features)
+import pymc as pm
+
+with pm.Model() as bayes_model:
+    beta_ppc = pm.Normal('beta_ppc', 0, 1)
+    beta_ssp = pm.Normal('beta_ssp', 0, 1)
+    sigma = pm.HalfNormal('sigma', 1)
+
+    mu = beta_ppc * X_df['PPC'] + beta_ssp * X_df['SSP']
+    y_obs = pm.Normal('y_obs', mu=mu, sigma=sigma, observed=y)
+
+    trace = pm.sample(
+    draws=2000,
+    tune=1000,
+    target_accept=0.9,
+    chains=1,
+    cores=1,
+    progressbar=True
+)
+
+pm.summary(trace)
+
+import pandas as pd
+import numpy as np
+
+from sklearn.preprocessing import StandardScaler
+
+import pymc as pm
+import arviz as az
+
+# =========================
+# MAIN FUNCTION
+# =========================
+def main():
+
+    # =========================
+    # LOAD DATA
+    # =========================
+    df = pd.read_csv("ML.csv", encoding="latin1")
+
+    features = ['SSP', 'PPC']
+    target = 'Coiling Ratio Index (CRI):\nCRI = D / (D + S)'
+
+    df = df.dropna(subset=features + [target])
+
+    X = df[features]
+    y = df[target].values
+
+    # =========================
+    # STANDARDIZE
+    # =========================
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    X_df = pd.DataFrame(X_scaled, columns=features)
+
+    # =========================
+    # BAYESIAN REGRESSION
+    # =========================
+    with pm.Model() as bayes_model:
+
+        beta_ppc = pm.Normal("beta_ppc", mu=0, sigma=1)
+        beta_ssp = pm.Normal("beta_ssp", mu=0, sigma=1)
+        sigma = pm.HalfNormal("sigma", 1)
+
+        mu = (
+            beta_ppc * X_df["PPC"].values +
+            beta_ssp * X_df["SSP"].values
+        )
+
+        pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y)
+
+        trace = pm.sample(
+            draws=1000,
+            tune=500,
+            target_accept=0.9,
+            chains=1,
+            cores=1,
+            progressbar=True
+        )
+
+    # =========================
+    # OUTPUT
+    # ========================
+    # =========================
+    # OUTPUT
+    # =========================
+    print(az.summary(trace, round_to=3))
+
+# =========================
+# ENTRY POINT
+# =========================
+if __name__ == "__main__":
+    main()
