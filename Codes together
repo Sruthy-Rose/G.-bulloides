@@ -1,0 +1,199 @@
+# =========================
+# IMPORT LIBRARIES
+# =========================
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ML / Stats
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+# Random Forest
+from sklearn.ensemble import RandomForestRegressor
+import shap
+
+# Gradient Boosting
+from xgboost import XGBRegressor
+
+# GAM
+from pygam import LinearGAM, s
+
+# SEM
+from semopy import Model
+
+# Multivariate
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
+# =========================
+# LOAD DATA
+# =========================
+df = pd.read_csv("ML.csv", encoding="latin1")
+
+features = ['SSP', 'PPC']
+target = 'Coiling Ratio Index (CRI):\nCRI = D / (D + S)'
+
+df = df.dropna(subset=features + [target])
+
+X = df[features]
+y = df[target]
+
+# Standardize
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_df = pd.DataFrame(X_scaled, columns=features)
+
+1.
+
+
+rf = RandomForestRegressor(
+    n_estimators=500,
+    max_depth=6,
+    random_state=42
+)
+
+rf.fit(X_df, y)
+
+# Feature importance
+rf_importance = pd.Series(
+    rf.feature_importances_,
+    index=features
+)
+
+print("Random Forest importance:\n", rf_importance)
+
+rf_importance.plot(kind='bar', title="RF Controls on CRI")
+plt.show()
+
+# SHAP
+explainer = shap.TreeExplainer(rf)
+shap_values = explainer.shap_values(X_df)
+
+shap.summary_plot(shap_values, X_df)
+
+
+
+2.
+
+xgb = XGBRegressor(
+    n_estimators=300,
+    max_depth=4,
+    learning_rate=0.05,
+    subsample=0.8,
+    random_state=42
+)
+
+xgb.fit(X_df, y)
+
+xgb_importance = pd.Series(
+    xgb.feature_importances_,
+    index=features
+)
+
+print("XGBoost importance:\n", xgb_importance)
+
+xgb_importance.plot(kind='bar', title="XGBoost Controls on CRI")
+plt.show()
+
+# SHAP for XGBoost
+explainer_xgb = shap.Explainer(xgb)
+shap_values_xgb = explainer_xgb(X_df)
+
+shap.summary_plot(shap_values_xgb, X_df)
+
+3.
+
+
+gam = LinearGAM(
+    s(0) + s(1)
+).fit(X_scaled, y)
+
+print(gam.summary())
+
+# Plot smooth terms
+fig, axs = plt.subplots(1, 2, figsize=(10,4))
+titles = ['SSP effect', 'PPC effect']
+
+for i, ax in enumerate(axs):
+    XX = gam.generate_X_grid(term=i)
+    ax.plot(XX[:, i], gam.partial_dependence(term=i, X=XX))
+    ax.set_title(titles[i])
+
+plt.tight_layout()
+plt.show()
+
+
+
+4.
+
+
+# BAYESIAN REGRESSION MODEL
+    # =========================
+    with pm.Model() as bayes_model:
+
+        beta_ppc = pm.Normal("beta_ppc", mu=0, sigma=1)
+        beta_ssp = pm.Normal("beta_ssp", mu=0, sigma=1)
+        sigma = pm.HalfNormal("sigma", 1)
+
+        mu = (
+            beta_ppc * X_df["PPC"].values +
+            beta_ssp * X_df["SSP"].values
+        )
+
+        y_obs = pm.Normal("y_obs", mu=mu, sigma=sigma, observed=y)
+
+        trace = pm.sample(
+            draws=2000,
+            tune=1000,
+            target_accept=0.9,
+            chains=1,
+            cores=1,
+            progressbar=True
+        )
+
+    # =========================
+    # OUTPUT
+    # =========================
+    print(az.summary(trace, round_to=3))
+
+# =========================
+# ENTRY POINT (CRITICAL)
+# =========================
+if __name__ == "__main__":
+    main()
+
+
+
+5.
+
+
+
+    # =========================
+    # LINEAR MODELS
+    # =========================
+    # PPC only
+    lr_ppc = LinearRegression().fit(X_df[['PPC']], y)
+    r2_ppc = lr_ppc.score(X_df[['PPC']], y)
+
+    # SSP only
+    lr_ssp = LinearRegression().fit(X_df[['SSP']], y)
+    r2_ssp = lr_ssp.score(X_df[['SSP']], y)
+
+    # Both
+    lr_both = LinearRegression().fit(X_df, y)
+    r2_both = lr_both.score(X_df, y)
+
+    # =========================
+    # OUTPUT
+    # =========================
+    print("R² PPC only :", round(r2_ppc, 3))
+    print("R² SSP only :", round(r2_ssp, 3))
+    print("R² Both     :", round(r2_both, 3))
+
+# =========================
+# ENTRY POINT
+# =========================
+if __name__ == "__main__":
+    main()
+
