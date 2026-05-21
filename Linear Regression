@@ -1,0 +1,325 @@
+# =========================================================
+# LINEAR REGRESSION ANALYSIS
+# CRI vs PPC and SSP
+# =========================================================
+
+# =========================
+# IMPORT LIBRARIES
+# =========================
+import pandas as pd
+import numpy as np
+import matplotlib
+
+matplotlib.use('TkAgg')
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Machine Learning / Statistics
+from sklearn.model_selection import (
+    train_test_split,
+    cross_val_score
+)
+
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.linear_model import LinearRegression
+
+from sklearn.metrics import (
+    r2_score,
+    mean_squared_error,
+    mean_absolute_error
+)
+
+# Statistical diagnostics
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+import statsmodels.api as sm
+
+# =========================
+# LOAD DATA
+# =========================
+df = pd.read_csv("ML.csv", encoding="latin1")
+
+# =========================
+# DEFINE VARIABLES
+# =========================
+features = [
+    'SSP',
+    'PPC'
+]
+
+target = 'Coiling Ratio Index (CRI):\nCRI = D / (D + S)'
+
+# =========================
+# REMOVE MISSING VALUES
+# =========================
+df = df.dropna(subset=features + [target])
+
+# =========================
+# INPUT AND OUTPUT
+# =========================
+X = df[features]
+y = df[target]
+
+# =========================
+# STANDARDIZATION
+# (important for coefficient comparison)
+# =========================
+scaler = StandardScaler()
+
+X_scaled = scaler.fit_transform(X)
+
+X_df = pd.DataFrame(
+    X_scaled,
+    columns=features
+)
+
+# =========================================================
+# 1. CORRELATION MATRIX
+# =========================================================
+print("\n=========================")
+print("CORRELATION MATRIX")
+print("=========================\n")
+
+corr_matrix = df[
+    features + [target]
+].corr()
+
+print(corr_matrix)
+
+# Heatmap
+plt.figure(figsize=(6,5))
+
+sns.heatmap(
+    corr_matrix,
+    annot=True,
+    cmap='coolwarm',
+    fmt=".2f"
+)
+
+plt.title("Correlation Matrix")
+plt.show()
+
+# =========================================================
+# 2. MULTICOLLINEARITY CHECK (VIF)
+# =========================================================
+print("\n=========================")
+print("VIF ANALYSIS")
+print("=========================\n")
+
+vif_data = pd.DataFrame()
+
+vif_data["Feature"] = features
+
+vif_data["VIF"] = [
+    variance_inflation_factor(
+        X_df.values, i
+    )
+    for i in range(len(features))
+]
+
+print(vif_data)
+
+# =========================================================
+# 3. TRAIN TEST SPLIT
+# =========================================================
+X_train, X_test, y_train, y_test = train_test_split(
+    X_df,
+    y,
+    test_size=0.2,
+    random_state=42
+)
+
+print("\nTraining samples :", len(X_train))
+print("Testing samples  :", len(X_test))
+
+# =========================================================
+# 4. LINEAR REGRESSION MODEL
+# =========================================================
+lr = LinearRegression()
+
+# Train model
+lr.fit(X_train, y_train)
+
+# =========================================================
+# 5. CROSS VALIDATION
+# =========================================================
+cv_scores = cross_val_score(
+    lr,
+    X_train,
+    y_train,
+    cv=5,
+    scoring='r2'
+)
+
+print("\n=========================")
+print("CROSS VALIDATION")
+print("=========================\n")
+
+print("CV Scores :", cv_scores)
+
+print("Mean CV R² :", round(
+    cv_scores.mean(), 3
+))
+
+# =========================================================
+# 6. PREDICTION
+# =========================================================
+y_pred = lr.predict(X_test)
+
+# =========================================================
+# 7. MODEL PERFORMANCE
+# =========================================================
+r2 = r2_score(y_test, y_pred)
+
+rmse = np.sqrt(
+    mean_squared_error(y_test, y_pred)
+)
+
+mae = mean_absolute_error(
+    y_test,
+    y_pred
+)
+
+print("\n=========================")
+print("MODEL PERFORMANCE")
+print("=========================\n")
+
+print("R²   :", round(r2, 3))
+
+print("RMSE :", round(rmse, 3))
+
+print("MAE  :", round(mae, 3))
+
+# =========================================================
+# 8. REGRESSION COEFFICIENTS
+# =========================================================
+coef_df = pd.DataFrame({
+    'Feature': features,
+    'Coefficient': lr.coef_
+})
+
+print("\n=========================")
+print("REGRESSION COEFFICIENTS")
+print("=========================\n")
+
+print(coef_df)
+
+print("\nIntercept :", lr.intercept_)
+
+# =========================================================
+# 9. STATISTICAL SUMMARY
+# =========================================================
+print("\n=========================")
+print("STATISTICAL SUMMARY")
+print("=========================\n")
+
+X_sm = sm.add_constant(X_df)
+
+model_sm = sm.OLS(y, X_sm).fit()
+
+print(model_sm.summary())
+
+# =========================================================
+# 10. RESIDUAL ANALYSIS
+# =========================================================
+residuals = y_test - y_pred
+
+# Residual vs Predicted
+plt.figure(figsize=(6,5))
+
+plt.scatter(y_pred, residuals)
+
+plt.axhline(
+    0,
+    linestyle='--'
+)
+
+plt.xlabel("Predicted CRI")
+
+plt.ylabel("Residuals")
+
+plt.title(
+    "Residuals vs Predicted"
+)
+
+plt.show()
+
+# Histogram of residuals
+plt.figure(figsize=(6,5))
+
+plt.hist(
+    residuals,
+    bins=20
+)
+
+plt.xlabel("Residual")
+
+plt.ylabel("Frequency")
+
+plt.title(
+    "Residual Distribution"
+)
+
+plt.show()
+
+# =========================================================
+# 11. ACTUAL vs PREDICTED
+# =========================================================
+plt.figure(figsize=(6,5))
+
+plt.scatter(
+    y_test,
+    y_pred
+)
+
+plt.plot(
+    [y.min(), y.max()],
+    [y.min(), y.max()],
+    linestyle='--'
+)
+
+plt.xlabel("Observed CRI")
+
+plt.ylabel("Predicted CRI")
+
+plt.title(
+    "Observed vs Predicted"
+)
+
+plt.show()
+
+# =========================================================
+# 12. INTERPRETATION
+# =========================================================
+print("\n=========================")
+print("INTERPRETATION")
+print("=========================\n")
+
+dominant_feature = coef_df.loc[
+    coef_df['Coefficient'].abs().idxmax(),
+    'Feature'
+]
+
+print(
+    f"The dominant linear control on CRI appears to be: "
+    f"{dominant_feature}"
+)
+
+print("\nInterpret coefficients carefully:")
+print(
+    "- Positive coefficient → CRI increases"
+)
+
+print(
+    "- Negative coefficient → CRI decreases"
+)
+
+print(
+    "- Larger absolute coefficient → stronger effect"
+)
+
+# =========================================================
+# END
+# =========================================================
